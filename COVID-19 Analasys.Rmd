@@ -1,0 +1,92 @@
+---
+title: "COVID-19 Data"
+output: pdf_document
+date: "2022-10-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Project Plan
+
+I am going to use this data to compare the effect of the vaccine on COVID-19 rates and COVID-19 Deaths.
+
+##Import and Clean
+I store the data files on my HDD to speed up load times.  That is the wild If scripts.  After that, I make all NA's 0 and remove unnessicary rows and columns, and combine all state data into 1 row.
+
+```{r Import Data}
+library(tidyverse)
+#This is to speed up download times if you have to rerun the entire process.
+
+if (!file.exists("time_series_covid19_confirmed_global.csv")){
+  Confirmed <- read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
+  write.csv(Confirmed, "time_series_covid19_confirmed_global.csv")
+} else {
+  Confirmed <- read.csv("time_series_covid19_confirmed_global.csv")
+  Confirmed <- Confirmed[-c(1)]
+}
+
+if (!file.exists("time_series_covid19_deaths_global.csv")){
+  Deaths <- read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv")
+   write.csv(Deaths, "time_series_covid19_deaths_global.csv")
+} else {
+  Deaths <- read.csv("time_series_covid19_deaths_global.csv")
+  Deaths <- Deaths[-c(1)]
+}
+
+if (!file.exists("time_series_covid19_vaccine_doses_admin_US.csv")){
+  Vaccine <- read.csv("https://raw.githubusercontent.com/govex/COVID-19/master/data_tables/vaccine_data/us_data/time_series/time_series_covid19_vaccine_doses_admin_US.csv")
+  Vaccine  <- Vaccine  %>% replace(is.na(.), 0)
+   write.csv(Vaccine, "time_series_covid19_vaccine_doses_admin_US.csv")
+} else {
+  Vaccine <- read.csv("time_series_covid19_vaccine_doses_admin_US.csv")
+  Vaccine <- Vaccine[-c(1)]
+}
+
+#Clean Data by remvoing unnessicary rows and coulums
+Confirmed <- Confirmed %>% select(-c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2", "Country_Region", "Lat", "Long_", "Combined_Key"))
+Deaths <- Deaths %>% select(-c("UID", "code3", "FIPS", "Lat", "Long_"))
+Vaccine <- Vaccine %>% select(-c("UID","iso2", "iso3", "FIPS", "Admin2", "Lat", "Long_", "Combined_Key", "code3", "Country_Region", "Population"))
+
+Confirmed <- Confirmed %>% group_by(Province_State) %>% summarize_if(is.numeric, sum)
+Deaths <- Deaths %>% group_by(Province_State) %>% summarize_if(is.numeric, sum)
+Confirmed <- Confirmed[-c(10,14),]
+Vaccine <- Vaccine[-c(57:61),]
+
+```
+
+##Prep data for merge
+I will now pivot longer all the data and make each date it's own column.  Then I will merge the data by date and by State into 1 giant data set.
+
+```{r Merge}
+library(lubridate)
+Confirmed <- pivot_longer(Confirmed, cols = -c("Province_State"), names_to = "Date", values_to = 'Confirmed', names_prefix = 'X')
+Confirmed$Date <- mdy(Confirmed$Date)
+
+Deaths <- pivot_longer(Deaths, cols = -c("Province_State", "Population"), names_to = "Date", values_to = 'Deaths', names_prefix = 'X')
+
+Deaths$Date <- mdy(Deaths$Date)
+
+Vaccine <- pivot_longer(Vaccine, cols = -c("Province_State"), names_to = "Date", values_to = 'Vaccinated', names_prefix = 'X')
+Vaccine$Date <- ymd(Vaccine$Date)
+
+Combined <- right_join(Deaths, Confirmed, Vaccine, by = c("Province_State","Date"))
+Combined <- left_join(Combined, Vaccine, by = c("Province_State","Date"))
+Combined  <- Combined  %>% replace(is.na(.), 0)
+
+
+```
+
+##Graph The Data
+
+I will start with graphing the whole US Data with all 3 Columns.
+
+```{r GraphUSA}
+ggplot(data = Combined, mapping = aes(x = Date, y = Confirmed, color = Province_State)) + geom_point()
+
+```
+
+
+
+
