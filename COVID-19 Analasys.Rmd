@@ -74,19 +74,114 @@ Vaccine$Date <- ymd(Vaccine$Date)
 Combined <- right_join(Deaths, Confirmed, Vaccine, by = c("Province_State","Date"))
 Combined <- left_join(Combined, Vaccine, by = c("Province_State","Date"))
 Combined  <- Combined  %>% replace(is.na(.), 0)
-
+Combined$Vaccinated <- Combined$Vaccinated/Combined$Population
+Combined$"Deaths*1000" <- Combined$Deaths/Combined$Population*1000
+Combined$Confirmed <- Combined$Confirmed/Combined$Population
+Combined$Deaths <- NULL
 
 ```
 
 ##Graph The Data
 
-I will start with graphing the whole US Data with all 3 Columns.
+I will start with graphing the whole US Data with all 3 Columns.  Please note deaths are multiplied by 1000 to be visable.
 
 ```{r GraphUSA}
-ggplot(data = Combined, mapping = aes(x = Date, y = Confirmed, color = Province_State)) + geom_point()
+Graphable <- Combined
+tmp <- colnames(Graphable)
+
+tmp <- c("Province_State", "Population", "Date", "Confirmed Infections", "Vaccines Injected", "Deaths*1000")
+colnames(Graphable) <- tmp
+Graphable <- pivot_longer(Graphable, cols = -c(Province_State, Population, Date), names_to = "Type", values_to = "Vals")
+
+Alabama <- Graphable %>% filter(Province_State == "Alabama")
+Colorado <- Graphable %>% filter(Province_State == "Colorado")
+Florida <- Graphable %>% filter(Province_State == "Florida")
+California <- Graphable %>% filter(Province_State == "California")
+
+color_key <- c("Confirmed" = "red", "deaths" = "green", "Vaccinated"= "blue")
+
+ggplot(data = Graphable, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point() + labs(x = "Date", y = "Stat/Population", title = "All States COVID-19 STATS/Population", color = "Statistic") + facet_wrap(~ Province_State)
+ggplot(data = Alabama, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point() + labs(x = "Date", y = "Stat/Population", title = "Alabama COVID-19 STATS/Population", color = "Statistic")
+ggplot(data = Colorado, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point()+ labs(x = "Date", y = "Stat/Population", title = "Colorado COVID-19 STATS/Population", color = "Statistic")
+ggplot(data = Florida, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point()+ labs(x = "Date", y = "Stat/Population", title = "Florida COVID-19 STATS/Population", color = "Statistic")
+ggplot(data = California, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point() + labs(x = "Date", y = "Stat/Population", title = "California COVID-19 STATS/Population", color = "Statistic")
+```
+##Modeling
+
+So from this data it's obvious that vaccines had an impact on deaths.  I think this is a linear relationship and can be modeled.  I'm going to try and  use LM to find the relationship between Cases and Vaccination and Deaths and Vaccination.
+
+```{r Modeling}
+
+tmp <- colnames(Combined)
+tmp[6] <- "Deaths"
+colnames(Combined) <- tmp
+model1 <- lm(formula = Deaths ~ Confirmed + Vaccinated, data = Combined)
+model2 <- lm(formula = Confirmed ~ Vaccinated, data = Combined)
 
 ```
 
+##Plotting the model
+I'll start with plotting the first model which is Deaths predicted by confirmed and vaccinated
+
+```{r Plot_2}
 
 
+Graphable <- Combined
+Graphable$Predicted_Deaths <- predict(model1, Graphable)
+tmp <- colnames(Graphable)
 
+tmp <- c("Province_State", "Population", "Date", "Confirmed Infections", "Vaccines Injected", "Deaths*1000", "Predicted_Deaths")
+colnames(Graphable) <- tmp
+Graphable <- pivot_longer(Graphable, cols = -c(Province_State, Population, Date), names_to = "Type", values_to = "Vals")
+Alabama <- Graphable %>% filter(Province_State == "Alabama")
+Colorado <- Graphable %>% filter(Province_State == "Colorado")
+Florida <- Graphable %>% filter(Province_State == "Florida")
+California <- Graphable %>% filter(Province_State == "California")
+
+ggplot(data = Graphable, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point() + labs(x = "Date", y = "Stat/Population", title = "All States COVID-19 STATS/Population", color = "Statistic", subtitle = "Predicted Deaths/Pop predicted by Vaccinated/pop and Infections/pop") + facet_wrap(~ Province_State)
+ggplot(data = Alabama, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point() + labs(x = "Date", y = "Stat/Population", title = "Alabama COVID-19 STATS/Population", color = "Statistic", subtitle = "Predicted Deaths/Pop predicted by Vaccinated/pop and Infections/pop")
+ggplot(data = Colorado, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point()+ labs(x = "Date", y = "Stat/Population", title = "Colorado COVID-19 STATS/Population", color = "Statistic", subtitle = "Predicted Deaths/Pop predicted by Vaccinated/pop and Infections/pop")
+ggplot(data = Florida, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point()+ labs(x = "Date", y = "Stat/Population", title = "Florida COVID-19 STATS/Population", color = "Statistic", subtitle = "Predicted Deaths/Pop predicted by Vaccinated/pop and Infections/pop")
+ggplot(data = California, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point() + labs(x = "Date", y = "Stat/Population", title = "California COVID-19 STATS/Population", color = "Statistic", subtitle = "Predicted Deaths/Pop predicted by Vaccinated/pop and Infections/pop")
+
+```
+That is a pretty close match, at least visually.  
+
+And Finally, I'm going to look at the plot for Vaccinations vs new Infections
+
+```{r Model2}
+Graphable <- Combined
+Graphable$Predicted_Infections <- predict(model2, Graphable)
+
+tmp <- colnames(Graphable)
+tmp <- c("Province_State", "Population", "Date", "Confirmed Infections", "Vaccines_Injected", "Deaths*1000", "Predicted Infections")
+colnames(Graphable) <- tmp
+
+Graphable <- pivot_longer(Graphable, cols = -c(Province_State, Population, Date, "Deaths*1000", Vaccines_Injected), names_to = "Type", values_to = "Vals")
+
+Alabama <- Graphable %>% filter(Province_State == "Alabama")
+Colorado <- Graphable %>% filter(Province_State == "Colorado")
+Florida <- Graphable %>% filter(Province_State == "Florida")
+California <- Graphable %>% filter(Province_State == "California")
+
+ggplot(data = Graphable, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point() + labs(x = "Date", y = "Stat/Population", title = "All States COVID-19 STATS/Population", color = "Statistic", subtitle = "Predicted Infections by Vaccines Injected/population") + facet_wrap(~ Province_State)
+ggplot(data = Alabama, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point() + labs(x = "Date", y = "Stat/Population", title = "Alabama Predicted Infections vs Actual Infections", color = "Statistic", subtitle = "Predicted Infections by Vaccines Injected/population")
+ggplot(data = Colorado, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point()+ labs(x = "Date", y = "Stat/Population", title = "Colorado COVID-19 STATS/Population", color = "Statistic", subtitle = "Predicted Infections by Vaccines Injected/population")
+ggplot(data = Florida, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point()+ labs(x = "Date", y = "Stat/Population", title = "Florida COVID-19 STATS/Population", color = "Statistic", subtitle = "Predicted Infections by Vaccines Injected/population")
+ggplot(data = California, mapping = aes(x = Date, y = Vals, color = Type)) + geom_point() + labs(x = "Date", y = "Stat/Population", title = "California COVID-19 STATS/Population", color = "Statistic", subtitle = "Predicted Infections by Vaccines Injected/population")
+
+
+```
+Wow, Confirmed Infections is very close to predicted infections as predicted only by vaccinations. 
+
+##Biases
+The largest bias is selection bias.  We know that the confirmed cases was way lower than the actual cases, at some times by an order of magnitude.  We also know that governments manipulated the data and activly prevented tests from being given out.  With that, the data is still conclusive on all points.
+
+##Conclusions
+
+Vaccines Work to reduce the infection rate and the death rate.
+
+```{r print env}
+sessionInfo()
+
+```
